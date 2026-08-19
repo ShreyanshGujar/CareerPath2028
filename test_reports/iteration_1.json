@@ -1,0 +1,24 @@
+{
+  "summary": "Frontend-only auth integration test for /career-path-2028.html. Verified Firebase Auth signup, reaching landing, entering JEE app, userChip display, logout returning to auth screen, and re-login with the same credentials. All auth flows PASS. Firestore permission-denied toast appears as expected (external config step, not a code bug).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "doLogout() awaits pushCloud() before signOut(); pushCloud silently swallows errors but this could delay logout when Firestore is slow. Currently harmless.",
+    "The 'Firestore rules block access' toast is correctly surfaced when permission-denied is detected — good UX fix.",
+    "userChip is only visible after entering an exam (not on landing); users cannot log out directly from the landing page. Consider adding a compact logout affordance on #landing."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100%"},
+  "test_credentials": "Fresh accounts created each run: qa<timestamp>@example.com / Test12345 (e.g. qa1787160385@example.com). Persisted in Firebase Auth project career-path-2028.",
+  "seed_data_creation": "Signup created 3 test Firebase Auth accounts during runs (qa1787160296, qa1787160353, qa1787160385 @example.com). No Firestore docs created (blocked by rules as expected).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Auth flow (signup, JEE enter, logout, re-login) fully verified against embedded Firebase config. Firestore rules are unpublished by design; permission-denied toast is expected. userChip logout is only accessible from in-app (top bar), not from landing — enter an exam first before attempting logout.",
+  "rca of the issue": "N/A - original reported bug ('Cloud sync issue') is resolved: Firebase config now embedded, and the toast now correctly identifies Firestore rule blockage. Publishing Firestore rules is a manual user step."
+}

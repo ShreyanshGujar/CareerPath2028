@@ -47,6 +47,8 @@ button{font-family:var(--font-b);cursor:pointer;border:none;background:none;colo
 #themeToggle:hover{transform:rotate(25deg) scale(1.08)}
 #installBtn{position:fixed;top:18px;right:78px;z-index:50;height:48px;padding:0 18px;border-radius:24px;background:var(--accent);color:#fff;font-weight:700;font-size:.88rem;box-shadow:0 8px 22px rgba(60,91,255,.4);display:flex;align-items:center;gap:8px}
 #installBtn:hover{filter:brightness(1.1);transform:translateY(-2px)}
+#landingLogout{position:fixed;top:18px;right:18px;z-index:50;padding:9px 15px;border-radius:22px;background:var(--card);border:1px solid var(--card-brd);backdrop-filter:var(--glass);font-weight:600;font-size:.82rem;display:flex;gap:8px;align-items:center;box-shadow:var(--shadow)}
+#landingLogout:hover{color:var(--red)}
 .landing-logo{width:104px;height:104px;border-radius:26px;margin-bottom:20px;box-shadow:var(--shadow);animation:floaty 4s ease-in-out infinite}
 @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 .logo-mini{width:26px;height:26px;border-radius:7px;vertical-align:middle;margin-right:7px}
@@ -220,6 +222,7 @@ option{background:var(--bg2);color:var(--txt)}
 <canvas id="confetti"></canvas>
 <button id="themeToggle" title="Toggle theme">🌙</button>
 <button id="installBtn" class="hide" title="Install as app"><i class="fa-solid fa-download"></i> Install</button>
+<button id="landingLogout" class="hide" onclick="doLogout()" title="Log out"><i class="fa-solid fa-right-from-bracket"></i> Log out</button>
 
 <!-- LANDING -->
 <div id="landing" class="wrap">
@@ -814,7 +817,17 @@ function settingsView(){return `<div class="page-title">Settings</div><div class
       <p style="color:var(--muted);font-size:.8rem;margin-bottom:10px">Status: <b style="color:${cloudOn()?'var(--green)':'var(--muted)'}">${cloudOn()?(currentUser?'Signed in as '+((state.profile&&state.profile.username)||currentUser.email):'Configured — sign in to sync'):'Not configured'}</b></p>
       <div class="field"><label>Paste your Firebase config to enable login &amp; sync</label><textarea id="fbCfg" rows="6" placeholder='apiKey: "AIza...", authDomain: "xxx.firebaseapp.com", projectId: "xxx", storageBucket: "...", messagingSenderId: "...", appId: "..."'>${localStorage.getItem('cp2028_fb')?JSON.stringify(JSON.parse(localStorage.getItem('cp2028_fb')),null,2):''}</textarea></div>
       <div class="row"><button class="btn" onclick="saveFbConfig()"><i class="fa-solid fa-floppy-disk"></i> Save &amp; Enable</button>${currentUser?`<button class="btn ghost" onclick="doLogout()"><i class="fa-solid fa-right-from-bracket"></i> Log out</button>`:''}</div>
-      <p style="color:var(--muted);font-size:.76rem;margin-top:10px">These keys are safe to store client-side; per-user security is enforced by Firestore rules.</p></div>
+      <p style="color:var(--muted);font-size:.76rem;margin-top:10px">These keys are safe to store client-side; per-user security is enforced by Firestore rules.</p>
+      <details style="margin-top:8px"><summary style="cursor:pointer;font-size:.78rem;color:var(--accent);font-weight:600">Firestore security rules (paste in Firebase → Firestore → Rules)</summary>
+      <pre style="white-space:pre-wrap;font-size:.72rem;background:rgba(0,0,0,.25);border:1px solid var(--card-brd);border-radius:10px;padding:12px;margin-top:8px;color:var(--txt)">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
+    }
+  }
+}</pre></details></div>
     <div class="card"><div class="label" style="margin-bottom:14px"><i class="fa-solid fa-database"></i> Data Backup</div>
       <div class="row"><button class="btn ghost" onclick="exportData()"><i class="fa-solid fa-download"></i> Export JSON</button>
       <button class="btn ghost" onclick="document.getElementById('impFile').click()"><i class="fa-solid fa-upload"></i> Import JSON</button>
@@ -897,9 +910,11 @@ function applyTheme(){document.body.dataset.theme=state.theme;document.getElemen
 document.getElementById('themeToggle').onclick=()=>{state.theme=state.theme==='dark'?'light':'dark';save();applyTheme();clickSound();};
 function enterApp(exam){state.exam=exam;save();
   document.getElementById('landing').classList.add('hide');document.getElementById('app').classList.remove('hide');
+  document.getElementById('landingLogout').classList.add('hide');
   document.getElementById('examPill').textContent=exam;document.getElementById('examPill').style.color=EXAMS[exam].color;
   showUser();render('dashboard');}
-function goLanding(){document.getElementById('app').classList.add('hide');document.getElementById('landing').classList.remove('hide');}
+function goLanding(){document.getElementById('app').classList.add('hide');document.getElementById('landing').classList.remove('hide');
+  if(currentUser)document.getElementById('landingLogout').classList.remove('hide');}
 document.querySelectorAll('.exam-card').forEach(c=>{c.addEventListener('mouseenter',hoverSound);
   c.addEventListener('click',()=>{clickSound();setTimeout(()=>enterApp(c.dataset.exam),120);});});
 
@@ -914,11 +929,16 @@ if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.s
 /* ============ AUTH + CLOUD SYNC (Firebase) ============ */
 /* ===== PASTE YOUR FIREBASE CONFIG BELOW (or use Settings → Cloud Sync) ===== */
 const FIREBASE_CONFIG={
-  apiKey:"", authDomain:"", projectId:"", storageBucket:"", messagingSenderId:"", appId:""
+  apiKey:"AIzaSyCq0jH33esyFATL-YtpzE5VzohodW4VDFQ",
+  authDomain:"career-path-2028.firebaseapp.com",
+  projectId:"career-path-2028",
+  storageBucket:"career-path-2028.firebasestorage.app",
+  messagingSenderId:"32920930630",
+  appId:"1:32920930630:web:833b6eedff2d8438d57d47"
 };
 /* ========================================================================== */
 let fbAuth=null,fbDb=null,currentUser=null,cloudTimer=null,authMode='login';
-function fbConfig(){let c={...FIREBASE_CONFIG};try{const o=JSON.parse(localStorage.getItem('cp2028_fb')||'null');if(o&&o.apiKey)c=o;}catch(e){}return c;}
+function fbConfig(){if(FIREBASE_CONFIG.apiKey)return {...FIREBASE_CONFIG};try{const o=JSON.parse(localStorage.getItem('cp2028_fb')||'null');if(o&&o.apiKey)return o;}catch(e){}return {...FIREBASE_CONFIG};}
 function cloudOn(){const c=fbConfig();return !!(window.firebase&&c.apiKey&&c.projectId);}
 function initFirebase(){
   if(!cloudOn())return false;
@@ -960,15 +980,19 @@ async function onAuthChanged(user){
   if(user){currentUser=user;
     try{const doc=await fbDb.collection('users').doc(user.uid).get();
       if(doc.exists&&doc.data()&&doc.data().state){state=applyDefaults(doc.data().state);localStorage.setItem(LS,JSON.stringify(state));toast('☁️ Synced from cloud');}
-      else{if(!state.profile)state.profile={};state.profile.username=user.displayName||state.profile.username||'';localStorage.setItem(LS,JSON.stringify(state));await pushCloud();}
-    }catch(e){console.warn('cloud pull failed',e);toast('⚠️ Cloud sync issue — using local data');}
+      else{if(!state.profile)state.profile={};state.profile.username=user.displayName||state.profile.username||'';localStorage.setItem(LS,JSON.stringify(state));await pushCloud();toast('☁️ Cloud sync enabled');}
+    }catch(e){console.warn('cloud pull failed',e);
+      if(e&&(e.code==='permission-denied'||(''+e).includes('permission')))toast('⚠️ Firestore rules block access — publish the security rules (see Settings)');
+      else toast('⚠️ Cloud sync issue — using local data');}
     applyTheme();showUser();
     document.getElementById('authScreen').classList.add('hide');
     document.getElementById('landing').classList.remove('hide');
+    document.getElementById('landingLogout').classList.remove('hide');
   }else{currentUser=null;
     document.getElementById('app').classList.add('hide');
     document.getElementById('landing').classList.add('hide');
     document.getElementById('userChip').classList.add('hide');
+    document.getElementById('landingLogout').classList.add('hide');
     document.getElementById('authScreen').classList.remove('hide');
   }
 }
