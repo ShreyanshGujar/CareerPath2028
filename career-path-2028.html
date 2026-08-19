@@ -224,6 +224,8 @@ option{background:var(--bg2);color:var(--txt)}
   font-weight:700;box-shadow:0 6px 22px rgba(255,120,40,.18)}
 .streak-badge .flames{filter:drop-shadow(0 0 8px rgba(255,140,40,.6));line-height:1}
 .streak-badge b{color:#ffb02e;font-family:var(--font-h)}
+.ach-badge{margin-left:6px;padding:5px 12px;border-radius:16px;font-size:.78rem;font-weight:700;background:rgba(255,215,0,.16);border:1px solid rgba(255,215,0,.45);color:#ffcf3a}
+.lb-rank{width:38px;text-align:center;font-weight:800;font-family:var(--font-h);font-size:1.05rem}
 </style>
 </head>
 <body data-theme="dark">
@@ -271,6 +273,7 @@ option{background:var(--bg2);color:var(--txt)}
       <button data-view="tests">Tests</button>
       <button data-view="insights">Insights</button>
       <button data-view="backlog">Backlog</button>
+      <button data-view="leaderboard">Leaderboard</button>
       <button data-view="files">Files</button>
       <button data-view="settings">Settings</button>
     </div>
@@ -328,6 +331,7 @@ function applyDefaults(s){
   if(!s.revisions)s.revisions=[]; if(!s.sessions)s.sessions=[]; if(!s.tests)s.tests=[];
   if(!s.files)s.files=[]; if(!s.upcoming)s.upcoming=[]; if(!s.backlog)s.backlog=[];
   if(typeof s.lastProgress!=='number')s.lastProgress=0;
+  if(typeof s.streakCelebrated!=='number')s.streakCelebrated=0;
   if(!s.examDates)s.examDates={JEE:{date:'2028-01-20',adv:'2028-05-18'},CET:{date:'2028-05-05'},Boards:{date:'2028-02-15'}};
   if(!s.profile)s.profile={username:''};
   return s;
@@ -409,9 +413,14 @@ function computeStreak(){const set=new Set(state.sessions.filter(s=>s.minutes>0)
   const d=new Date();if(!set.has(d.toISOString().slice(0,10)))d.setDate(d.getDate()-1);
   let n=0;while(set.has(d.toISOString().slice(0,10))){n++;d.setDate(d.getDate()-1);}return n;}
 function streakFlames(n){return n>=60?'🔥🔥🔥🔥🔥':n>=30?'🔥🔥🔥🔥':n>=14?'🔥🔥🔥':n>=7?'🔥🔥':n>=1?'🔥':'✨';}
-function streakBadge(){const n=computeStreak();const sz=Math.min(2.2,1.1+n*0.03);
+function streakTier(n){return n>=100?{icon:'💯',label:'Century Scholar'}:n>=30?{icon:'🏆',label:'30-Day Legend'}:n>=7?{icon:'⭐',label:'Week Warrior'}:null;}
+function streakBadge(){const n=computeStreak();const sz=Math.min(2.2,1.1+n*0.03);const t=streakTier(n);
   return `<div class="streak-badge" data-testid="streak-badge"><span class="flames" style="font-size:${sz}rem">${streakFlames(n)}</span>`+
-    (n>0?`<span><b style="font-size:1.15rem">${n}</b> day${n>1?'s':''} study streak</span>`:`<span>Study today to start your streak!</span>`)+`</div>`;}
+    (n>0?`<span><b style="font-size:1.15rem">${n}</b> day${n>1?'s':''} study streak</span>`:`<span>Study today to start your streak!</span>`)+
+    (t?`<span class="ach-badge">${t.icon} ${t.label}</span>`:'')+`</div>`;}
+function checkStreakMilestone(){const s=computeStreak();const MS=[7,30,100];let cur=0;MS.forEach(m=>{if(s>=m)cur=m;});
+  if(cur>(state.streakCelebrated||0)){const t=streakTier(cur);celebrate(`🎉 ${cur}-day streak! ${t.icon} "${t.label}" unlocked!`);}
+  if(cur!==state.streakCelebrated){state.streakCelebrated=cur;save();}}
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 function examDate(ex){return (state.examDates[ex]||{}).date||EXAMS[ex].date;}
 function examAdv(ex){return (state.examDates[ex]||{}).adv||EXAMS[ex].adv||'';}
@@ -422,8 +431,8 @@ let currentView='dashboard';
 function render(v){currentView=v;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   const el=document.getElementById('views');
-  el.innerHTML=({dashboard:dashboardView,syllabus:syllabusView,study:studyView,tests:testsView,insights:insightsView,backlog:backlogView,files:filesView,settings:settingsView}[v])();
-  ({dashboard:dashInit,syllabus:sylInit,study:studyInit,tests:testsInit,insights:insInit,backlog:backlogInit,files:filesInit,settings:setInit}[v])();
+  el.innerHTML=({dashboard:dashboardView,syllabus:syllabusView,study:studyView,tests:testsView,insights:insightsView,backlog:backlogView,leaderboard:leaderboardView,files:filesView,settings:settingsView}[v])();
+  ({dashboard:dashInit,syllabus:sylInit,study:studyInit,tests:testsInit,insights:insInit,backlog:backlogInit,leaderboard:leaderboardInit,files:filesInit,settings:setInit}[v])();
 }
 document.getElementById('nav').addEventListener('click',e=>{const b=e.target.closest('button');if(b){clickSound();render(b.dataset.view);}});
 
@@ -479,6 +488,7 @@ function dashboardView(){
 }
 function stat(l,v,ic){return `<div class="card"><div style="display:flex;justify-content:space-between"><span class="label">${l}</span><i class="fa-solid ${ic}" style="color:var(--accent);opacity:.7"></i></div><div class="stat-num">${v}</div></div>`;}
 function dashInit(){const op=overallPct();if(op>=100&&state.lastProgress<100){celebrate('🎉 100% syllabus complete! You did it! 🏆');}state.lastProgress=op;save();
+  checkStreakMilestone();
   const due=state.upcoming.find(t=>t.date<=todayStr());if(due)setTimeout(()=>enterResultModal(due.id),400);}
 function addUpcomingModal(){clickSound();openModal(`<h3>Add Upcoming Test <span class="x" onclick="closeModal()">×</span></h3>
   <div class="field"><label>Test name</label><input id="ucName" placeholder="e.g. Allen Major Test 4"></div>
@@ -798,6 +808,34 @@ function addBacklog(){const t=document.getElementById('blTitle').value.trim();if
 function toggleBacklog(id){const b=state.backlog.find(x=>x.id===id);if(!b)return;b.done=!b.done;save();
   if(b.done){celebrate('✅ Backlog cleared!');}else beep(400,.1,'sine',.12);render('backlog');}
 function delBacklog(id){state.backlog=state.backlog.filter(b=>b.id!==id);save();beep(300,.1,'sine',.12);render('backlog');toast('🗑️ Removed');}
+
+/* ============ LEADERBOARD ============ */
+let lbSort='streak';
+function leaderboardView(){return `<div class="page-title">Leaderboard</div><div class="page-sub">Compare study streaks &amp; weekly focus hours with everyone using Career Path 2028</div>
+  <div class="subtabs" id="lbTabs">
+    <button data-s="streak" class="${lbSort==='streak'?'active':''}">🔥 Streak</button>
+    <button data-s="weekly" class="${lbSort==='weekly'?'active':''}">⏱️ Weekly Hours</button></div>
+  <div class="card"><div id="lbBody"><p style="color:var(--muted);font-size:.88rem"><i class="fa-solid fa-spinner spin"></i> Loading...</p></div></div>`;}
+function leaderboardInit(){const t=document.getElementById('lbTabs');if(t)t.onclick=e=>{const b=e.target.closest('button');if(b){clickSound();lbSort=b.dataset.s;render('leaderboard');}};loadLeaderboard();}
+async function loadLeaderboard(){const el=document.getElementById('lbBody');if(!el)return;
+  if(!cloudOn()||!currentUser){el.innerHTML=`<p style="color:var(--muted);font-size:.88rem">Sign in with cloud sync to join the leaderboard and compare with friends.</p>`;return;}
+  try{await updateLeaderboardDoc();
+    const snap=await fbDb.collection('leaderboard').get();
+    let rows=[];snap.forEach(d=>{const x=d.data()||{};rows.push({uid:d.id,username:x.username||'Student',streak:x.streak||0,weekly:x.weekly||0});});
+    rows.sort((a,b)=>lbSort==='weekly'?(b.weekly-a.weekly||b.streak-a.streak):(b.streak-a.streak||b.weekly-a.weekly));
+    if(!rows.length){el.innerHTML=`<p style="color:var(--muted);font-size:.88rem">No one on the board yet — be the first! Log a study session.</p>`;return;}
+    el.innerHTML=rows.map((r,i)=>{const me=currentUser&&r.uid===currentUser.uid;const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':('#'+(i+1));
+      return `<div class="li" style="${me?'border-color:var(--accent);background:rgba(108,140,255,.12)':''}">
+        <span class="lb-rank">${medal}</span>
+        <div class="grow"><b>${(''+r.username).replace(/</g,'&lt;')}${me?' <span style="color:var(--accent)">(you)</span>':''}</b></div>
+        <span class="tag" style="background:rgba(255,140,60,.15);color:#ffb02e">🔥 ${r.streak}</span>
+        <span class="tag done">${(r.weekly/60).toFixed(1)}h / wk</span></div>`;}).join('');
+  }catch(e){console.warn('leaderboard load failed',e);
+    el.innerHTML=`<p style="color:var(--muted);font-size:.88rem">Couldn't load the leaderboard. Add the <b>leaderboard</b> collection to your Firestore rules (see Settings → Account &amp; Cloud Sync), then reload.</p>`;}
+}
+async function updateLeaderboardDoc(){if(!currentUser||!fbDb)return;
+  try{await fbDb.collection('leaderboard').doc(currentUser.uid).set({username:(state.profile&&state.profile.username)||currentUser.email,streak:computeStreak(),weekly:studyMin(s=>inWeek(s.date)),updated:Date.now()},{merge:true});}catch(e){console.warn('lb update failed',e);}}
+
 function chapModal(s,cl,ci){const ch=state.syllabus[s][cl][ci];
   openModal(`<h3>${ch.name} <span class="x" onclick="closeModal()">×</span></h3>
     <p style="color:var(--muted);font-size:.85rem;margin-bottom:16px">${s} • Class ${cl} • Overall ${chapterPct(ch).toFixed(0)}%</p>
@@ -840,6 +878,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId} {
       allow read, write: if request.auth != null
+        && request.auth.uid == userId;
+    }
+    match /leaderboard/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
         && request.auth.uid == userId;
     }
   }
@@ -1018,7 +1061,7 @@ async function doLogout(){clickSound();try{await pushCloud();await fbAuth.signOu
 function showSyncBadge(){const b=document.getElementById('syncBadge');if(!b)return;b.classList.add('show');clearTimeout(b._t);b._t=setTimeout(()=>b.classList.remove('show'),1800);}
 function scheduleCloudPush(){if(!currentUser||!fbDb)return;clearTimeout(cloudTimer);cloudTimer=setTimeout(pushCloud,1500);}
 async function pushCloud(){if(!currentUser||!fbDb)return;
-  try{await fbDb.collection('users').doc(currentUser.uid).set({username:(state.profile&&state.profile.username)||'',state:state,updated:Date.now()},{merge:true});showSyncBadge();}catch(e){console.warn('push failed',e);}}
+  try{await fbDb.collection('users').doc(currentUser.uid).set({username:(state.profile&&state.profile.username)||'',state:state,updated:Date.now()},{merge:true});showSyncBadge();updateLeaderboardDoc();}catch(e){console.warn('push failed',e);}}
 function parseFbConfig(txt){txt=(txt||'').trim();
   try{if(txt.startsWith('{'))return JSON.parse(txt);}catch(e){}
   const keys=['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'];const o={};
