@@ -9,7 +9,12 @@ An 11th-grade student wants a single self-contained HTML/CSS/JS file study track
 - Groq AI via browser fetch using `openai/gpt-oss-120b` (user pastes key in Settings; llama-3.3-70b-versatile was deprecated Aug 2026).
 
 ## Implemented (2026-08-19)
+- PWA: installable (manifest.webmanifest + generated logo icons 192/512/apple-touch) + offline service worker (sw.js, cache-first runtime caching incl. CDN fonts/icons; never caches Groq). SW verified active & controlling page. Install button + beforeinstallprompt handling.
+- Logo: AI-generated lightning+arrow+book icon on landing (floating anim) + topbar mini + favicon.
 - Landing: 3 exam cards (JEE/CET/Boards), colored hover glow + hover sound, click beep, particle bg, theme toggle, dark default.
+- Syllabus checkboxes now 6: Theory/Module/DPP/Mains PYQ/Advance PYQ/Extra Book. Piano-style ascending tick pitch based on # boxes checked in a topic.
+- Revision: delete button on due & upcoming items (delRev).
+- Manage Syllabus: add + remove existing chapter (dropdown + confirm modal).
 - Dashboard: dynamic countdown (uses editable exam dates), tentative month/year auto from date, overall progress bar (color-coded, legend text removed), quick stats, Today's Target.
 - Upcoming Tests: **popup** to add (name/date/marks); when date arrives auto-prompts "Enter Result" (P/C/M + portion) → moves to Tests section with celebration.
 - Syllabus: full NCERT Class 11/12 Phy/Chem/Maths; Theory/Module/DPP/Mains PYQ/Advance PYQ checkboxes with tick sound; chapter progress; celebration on 100%; add custom topics; stays expanded on tick.

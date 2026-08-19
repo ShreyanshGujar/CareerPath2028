@@ -4,6 +4,14 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>⚡ Career Path 2028</title>
+<meta name="theme-color" content="#070b16" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icon-192.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="CP2028" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -37,6 +45,11 @@ button{font-family:var(--font-b);cursor:pointer;border:none;background:none;colo
   background:var(--card);border:1px solid var(--card-brd);backdrop-filter:var(--glass);font-size:19px;
   display:flex;align-items:center;justify-content:center;transition:transform .3s,background .3s;box-shadow:var(--shadow)}
 #themeToggle:hover{transform:rotate(25deg) scale(1.08)}
+#installBtn{position:fixed;top:18px;right:78px;z-index:50;height:48px;padding:0 18px;border-radius:24px;background:var(--accent);color:#fff;font-weight:700;font-size:.88rem;box-shadow:0 8px 22px rgba(60,91,255,.4);display:flex;align-items:center;gap:8px}
+#installBtn:hover{filter:brightness(1.1);transform:translateY(-2px)}
+.landing-logo{width:104px;height:104px;border-radius:26px;margin-bottom:20px;box-shadow:var(--shadow);animation:floaty 4s ease-in-out infinite}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.logo-mini{width:26px;height:26px;border-radius:7px;vertical-align:middle;margin-right:7px}
 
 /* LANDING */
 #landing{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px}
@@ -196,9 +209,11 @@ option{background:var(--bg2);color:var(--txt)}
 <canvas id="particles"></canvas>
 <canvas id="confetti"></canvas>
 <button id="themeToggle" title="Toggle theme">🌙</button>
+<button id="installBtn" class="hide" title="Install as app"><i class="fa-solid fa-download"></i> Install</button>
 
 <!-- LANDING -->
 <div id="landing" class="wrap">
+  <img src="icon-192.png" alt="Career Path 2028 logo" class="landing-logo" onerror="this.style.display='none'" />
   <h1 class="brand">⚡ Career Path 2028</h1>
   <p class="sub">Your personal command center for JEE, CET & 12th Boards. Track syllabus, revisions, tests and study time — all in one place.</p>
   <div class="exam-grid">
@@ -211,7 +226,7 @@ option{background:var(--bg2);color:var(--txt)}
 <!-- APP -->
 <div id="app" class="wrap hide">
   <div class="topbar">
-    <div class="logo" onclick="goLanding()">⚡ CP<span style="color:var(--accent)">2028</span></div>
+    <div class="logo" onclick="goLanding()"><img src="icon-192.png" class="logo-mini" onerror="this.style.display='none'">CP<span style="color:var(--accent)">2028</span></div>
     <div class="nav" id="nav">
       <button data-view="dashboard" class="active">Dashboard</button>
       <button data-view="syllabus">Syllabus</button>
@@ -234,7 +249,7 @@ option{background:var(--bg2);color:var(--txt)}
 /* ============ STORAGE ============ */
 const LS='cp2028';
 const SUBJECTS=['Physics','Chemistry','Maths'];
-const CHECK_KEYS=[['theory','Theory'],['module','Module'],['dpp','DPP'],['mainsPyq','Mains PYQ'],['advPyq','Advance PYQ']];
+const CHECK_KEYS=[['theory','Theory'],['module','Module'],['dpp','DPP'],['mainsPyq','Mains PYQ'],['advPyq','Advance PYQ'],['extraBook','Extra Book']];
 const EXAMS={
   JEE:{color:'var(--jee)',tent:'Tentative January 2028 (Main)',date:'2028-01-20',adv:'2028-05-18',advTent:'Tentative May 2028 (Advanced)'},
   CET:{color:'var(--cet)',tent:'Tentative May 2028',date:'2028-05-05'},
@@ -283,6 +298,9 @@ function beep(freq=520,dur=.12,type='sine',vol=.15){
 }
 const clickSound=()=>beep(640,.1,'triangle',.18);
 const tickSound=()=>beep(880,.06,'square',.12);
+const PIANO=[523.25,587.33,659.25,783.99,880,987.77,1046.5];
+function pianoTick(count,checking){const i=Math.max(0,Math.min(PIANO.length-1,count-1));
+  beep(checking?PIANO[i]:PIANO[i]*0.75,.13,'triangle',.17);}
 const hoverSound=()=>beep(430,.05,'sine',.07);
 const okSound=()=>beep(760,.12,'sine',.16);
 function fanfare(){[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>beep(f,.2,'triangle',.2),i*110));}
@@ -459,7 +477,8 @@ function renderChapters(){
 }
 function toggleChk(ci,ti,k){const ch=state.syllabus[curSub][curCl][ci];const t=ch.topics[ti];
   const openCis=[...document.querySelectorAll('.chap.open')].map(e=>+e.dataset.ci);
-  t.checks[k]=!t.checks[k];tickSound();
+  t.checks[k]=!t.checks[k];
+  const cnt=CHECK_KEYS.reduce((a,[kk])=>a+(t.checks[kk]?1:0),0);pianoTick(cnt,t.checks[k]);
   const nowDone=chapterPct(ch)>=100;save();renderChapters();
   openCis.forEach(i=>{const el=document.querySelector('.chap[data-ci="'+i+'"]');if(el)el.classList.add('open');});
   if(nowDone){celebrate('🎉 '+ch.name+' complete!');}
@@ -499,8 +518,9 @@ function revTab(){
       <div class="label" style="margin-bottom:14px">Due Revisions</div>
       ${due.length?due.sort((a,b)=>a.due.localeCompare(b.due)).map(r=>`<div class="li">
         <span class="tag due">R${r.rev}</span><div class="grow"><b>${r.topic}</b><br><small>${r.due} • ${r.subject}</small></div>
-        <button class="btn sm ok" onclick="completeRev('${r.id}')">Complete</button></div>`).join(''):`<p style="color:var(--muted);font-size:.88rem">Nothing due 🎉 Schedule one below.</p>`}
-      ${up.length?`<div class="label" style="margin:18px 0 10px">Upcoming</div>`+up.sort((a,b)=>a.due.localeCompare(b.due)).map(r=>`<div class="li"><span class="tag up">R${r.rev}</span><div class="grow"><b>${r.topic}</b><br><small>${r.due} • in ${daysTo(r.due)}d</small></div></div>`).join(''):''}
+        <button class="btn sm ok" onclick="completeRev('${r.id}')">Complete</button>
+        <button class="btn sm danger" onclick="delRev('${r.id}')"><i class="fa-solid fa-trash"></i></button></div>`).join(''):`<p style="color:var(--muted);font-size:.88rem">Nothing due 🎉 Schedule one below.</p>`}
+      ${up.length?`<div class="label" style="margin:18px 0 10px">Upcoming</div>`+up.sort((a,b)=>a.due.localeCompare(b.due)).map(r=>`<div class="li"><span class="tag up">R${r.rev}</span><div class="grow"><b>${r.topic}</b><br><small>${r.due} • in ${daysTo(r.due)}d</small></div><button class="btn sm danger" onclick="delRev('${r.id}')"><i class="fa-solid fa-trash"></i></button></div>`).join(''):''}
     </div>
     <div class="card">
       <div class="label" style="margin-bottom:14px">Schedule Revision</div>
@@ -518,8 +538,8 @@ function completeRev(id){const r=state.revisions.find(x=>x.id===id);if(!r)return
   const ni=Math.min(r.ivl+1,REV_INTERVALS.length-1);const nd=new Date();nd.setDate(nd.getDate()+REV_INTERVALS[ni]);
   state.revisions.push({id:uid(),topic:r.topic,subject:r.subject,due:nd.toISOString().slice(0,10),rev:r.rev+1,status:'due',ivl:ni});
   save();renderTab();toast('✅ Done! Next revision in '+REV_INTERVALS[ni]+' days');}
-function autoSchedule(){const weak=weakChapters().slice(0,6);if(!weak.length)return toast('No weak chapters — great job!');
-  let n=0;weak.forEach((w,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);
+function delRev(id){state.revisions=state.revisions.filter(r=>r.id!==id);save();beep(300,.1,'sine',.12);renderTab();toast('🗑️ Revision removed');}
+function autoSchedule(){const weak=weakChapters().slice(0,6);if(!weak.length)return toast('No weak chapters — great job!');  let n=0;weak.forEach((w,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);
     state.revisions.push({id:uid(),topic:w.name,subject:w.subject,due:d.toISOString().slice(0,10),rev:1,status:'due',ivl:0});n++;});
   save();renderTab();toast('🤖 Auto-scheduled '+n+' weak topics');}
 
@@ -715,7 +735,10 @@ function settingsView(){return `<div class="page-title">Settings</div><div class
       <div class="field"><label>Subject</label><select id="msSub">${SUBJECTS.map(s=>`<option>${s}</option>`).join('')}</select></div>
       <div class="row"><div class="field" style="flex:1"><label>Class</label><select id="msCl"><option>11</option><option>12</option></select></div>
       <div class="field" style="flex:2"><label>New chapter name</label><input id="msChap" placeholder="e.g. Rotational Dynamics"></div></div>
-      <button class="btn" onclick="addChapter()"><i class="fa-solid fa-plus"></i> Add Chapter</button></div>
+      <button class="btn" onclick="addChapter()"><i class="fa-solid fa-plus"></i> Add Chapter</button>
+      <div class="field" style="margin-top:16px"><label>Remove an existing chapter</label>
+        <div class="row"><select id="msDel" style="flex:1"></select>
+        <button class="btn danger" onclick="removeChapter()"><i class="fa-solid fa-trash"></i> Remove</button></div></div></div>
     <div class="card"><div class="label" style="margin-bottom:14px"><i class="fa-solid fa-calendar-days"></i> Exam Dates</div>
       <div class="field"><label>JEE Main / primary exam date</label><input type="date" id="edJEE" value="${examDate('JEE')}"></div>
       <div class="field"><label>JEE Advanced date</label><input type="date" id="edJEEadv" value="${examAdv('JEE')}"></div>
@@ -729,7 +752,14 @@ function settingsView(){return `<div class="page-title">Settings</div><div class
       <button class="btn danger" onclick="clearData()"><i class="fa-solid fa-trash"></i> Clear All</button></div>
       <input type="file" id="impFile" accept=".json" class="hide" onchange="importData(event)"></div>
   </div>`;}
-function setInit(){}
+function setInit(){fillMsDel();const a=document.getElementById('msSub'),b=document.getElementById('msCl');if(a)a.onchange=fillMsDel;if(b)b.onchange=fillMsDel;}
+function fillMsDel(){const sel=document.getElementById('msDel');if(!sel)return;const s=document.getElementById('msSub').value,cl=+document.getElementById('msCl').value;
+  sel.innerHTML=state.syllabus[s][cl].map((ch,i)=>`<option value="${i}">${ch.name}</option>`).join('');}
+function removeChapter(){const s=document.getElementById('msSub').value,cl=+document.getElementById('msCl').value,i=+document.getElementById('msDel').value;
+  if(isNaN(i)||!state.syllabus[s][cl][i])return toast('No chapter selected');const nm=state.syllabus[s][cl][i].name;
+  openModal(`<h3>Remove chapter? <span class="x" onclick="closeModal()">×</span></h3><p style="color:var(--muted);margin-bottom:18px">Delete "<b style="color:var(--txt)">${nm}</b>" from ${s} Class ${cl}? This also removes its progress.</p>
+  <div class="row"><button class="btn danger" onclick="doRemoveChapter('${s}',${cl},${i})">Yes, remove</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);}
+function doRemoveChapter(s,cl,i){const nm=state.syllabus[s][cl][i].name;state.syllabus[s][cl].splice(i,1);save();beep(300,.1,'sine',.12);closeModal();fillMsDel();toast('🗑️ Removed '+nm);}
 function saveExamDates(){state.examDates={JEE:{date:document.getElementById('edJEE').value,adv:document.getElementById('edJEEadv').value},
   CET:{date:document.getElementById('edCET').value},Boards:{date:document.getElementById('edBoards').value}};
   save();okSound();toast('📅 Exam dates updated');}
@@ -742,7 +772,7 @@ async function testGroq(){const k=document.getElementById('setGroq').value.trim(
     else{const j=await r.json().catch(()=>({}));toast('❌ Failed — '+((j.error&&j.error.message)||('HTTP '+r.status)));}
   }catch(e){toast('❌ Failed — network/CORS error');}}
 function addChapter(){const s=document.getElementById('msSub').value,cl=+document.getElementById('msCl').value,nm=document.getElementById('msChap').value.trim();
-  if(!nm)return toast('Enter chapter name');state.syllabus[s][cl].push({id:uid(),name:nm,topics:[{id:uid(),name:nm,checks:{}}]});save();toast('Chapter added to '+s);document.getElementById('msChap').value='';}
+  if(!nm)return toast('Enter chapter name');state.syllabus[s][cl].push({id:uid(),name:nm,topics:[{id:uid(),name:nm,checks:{}}]});save();okSound();fillMsDel();toast('Chapter added to '+s);document.getElementById('msChap').value='';}
 function exportData(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);a.download='career-path-2028-backup-'+todayStr()+'.json';a.click();toast('📦 Exported');}
 function importData(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();
@@ -803,6 +833,14 @@ function enterApp(exam){state.exam=exam;save();
 function goLanding(){document.getElementById('app').classList.add('hide');document.getElementById('landing').classList.remove('hide');}
 document.querySelectorAll('.exam-card').forEach(c=>{c.addEventListener('mouseenter',hoverSound);
   c.addEventListener('click',()=>{clickSound();setTimeout(()=>enterApp(c.dataset.exam),120);});});
+
+/* ============ PWA ============ */
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;const b=document.getElementById('installBtn');if(b)b.classList.remove('hide');});
+document.getElementById('installBtn').onclick=async()=>{if(!deferredPrompt)return toast('Use your browser menu → "Install app"');
+  deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById('installBtn').classList.add('hide');};
+window.addEventListener('appinstalled',()=>{document.getElementById('installBtn').classList.add('hide');toast('✅ Installed! Open it from your home screen.');});
+if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 
 /* ============ INIT ============ */
 applyTheme();
