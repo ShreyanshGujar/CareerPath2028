@@ -851,9 +851,11 @@ function settingsView(){return `<div class="page-title">Settings</div><div class
       <div class="field"><label>Daily study hours goal</label><input type="number" id="setTarget" value="${state.settings.dailyTarget||4}" min="1" max="16"></div>
       <button class="btn" onclick="saveTarget()">Save Target</button></div>
     <div class="card"><div class="label" style="margin-bottom:14px"><i class="fa-solid fa-robot"></i> Groq AI Activation</div>
-      <div class="field"><label>Groq API key</label><input type="password" id="setGroq" value="${state.settings.groqKey||''}" placeholder="gsk_..."></div>
-      <div class="row"><button class="btn" onclick="saveGroq()">Save Key</button><button class="btn ghost" onclick="testGroq()">Test API</button></div>
-      <p style="color:var(--muted);font-size:.78rem;margin-top:10px">Get a free key at <b>console.groq.com/keys</b>. Stored only in your browser.</p></div>
+      ${state.settings.groqKey?`<div style="display:flex;align-items:center;gap:10px;font-weight:700;color:var(--green)"><i class="fa-solid fa-circle-check"></i> Groq AI Connected</div>
+        <button class="btn ghost sm" style="margin-top:12px" onclick="disconnectGroq()"><i class="fa-solid fa-link-slash"></i> Disconnect</button>`:`
+        <div class="field"><label>Groq API key</label><input type="password" id="setGroq" value="" placeholder="gsk_..."></div>
+        <div class="row"><button class="btn" onclick="saveGroq()">Save Key</button><button class="btn ghost" onclick="testGroq()">Test API</button></div>
+        <p style="color:var(--muted);font-size:.78rem;margin-top:10px">Get a free key at <b>console.groq.com/keys</b>. Stored only in your browser.</p>`}</div>
     <div class="card"><div class="label" style="margin-bottom:14px"><i class="fa-solid fa-layer-group"></i> Manage Syllabus</div>
       <div class="field"><label>Subject</label><select id="msSub">${SUBJECTS.map(s=>`<option>${s}</option>`).join('')}</select></div>
       <div class="row"><div class="field" style="flex:1"><label>Class</label><select id="msCl"><option>11</option><option>12</option></select></div>
@@ -891,11 +893,12 @@ function saveExamDates(){state.examDates={JEE:{date:document.getElementById('edJ
   CET:{date:document.getElementById('edCET').value},Boards:{date:document.getElementById('edBoards').value}};
   save();okSound();toast('📅 Exam dates updated');}
 function saveTarget(){state.settings.dailyTarget=+document.getElementById('setTarget').value||4;save();toast('🎯 Target saved');}
-function saveGroq(){state.settings.groqKey=document.getElementById('setGroq').value.trim();save();toast('🔑 Groq key saved');}
+function saveGroq(){state.settings.groqKey=document.getElementById('setGroq').value.trim();save();toast('🔑 Groq key saved');render('settings');}
+function disconnectGroq(){state.settings.groqKey='';save();beep(300,.1,'sine',.12);toast('Groq disconnected');render('settings');}
 async function testGroq(){const k=document.getElementById('setGroq').value.trim();if(!k)return toast('❌ Enter a key first');toast('<i class="fa-solid fa-spinner spin"></i> Testing...');
   try{const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+k},
     body:JSON.stringify({model:'openai/gpt-oss-120b',messages:[{role:'user',content:'hi'}],max_tokens:5})});
-    if(r.ok){state.settings.groqKey=k;save();okSound();toast('✅ Groq API activated!');}
+    if(r.ok){state.settings.groqKey=k;save();okSound();toast('✅ Groq API activated!');render('settings');}
     else{const j=await r.json().catch(()=>({}));toast('❌ Failed — '+((j.error&&j.error.message)||('HTTP '+r.status)));}
   }catch(e){toast('❌ Failed — network/CORS error');}}
 function addChapter(){const s=document.getElementById('msSub').value,cl=+document.getElementById('msCl').value,nm=document.getElementById('msChap').value.trim();
