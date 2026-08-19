@@ -1,4 +1,4 @@
-const CACHE='cp2028-v1';
+const CACHE='cp2028-v2';
 const CORE=['./','./index.html','./career-path-2028.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 self.addEventListener('install',e=>{
   self.skipWaiting();
@@ -10,8 +10,8 @@ self.addEventListener('activate',e=>{
 self.addEventListener('fetch',e=>{
   const req=e.request;
   if(req.method!=='GET')return;
-  // Never cache API calls (e.g. Groq)
-  if(req.url.includes('api.groq.com'))return;
+  // Never cache API / auth traffic (Groq, Firebase, Google APIs)
+  if(/api\.groq\.com|googleapis\.com|identitytoolkit|firebaseio|firestore|gstatic\.com\/firebasejs/.test(req.url))return;
   e.respondWith(
     caches.match(req).then(cached=>{
       const net=fetch(req).then(res=>{

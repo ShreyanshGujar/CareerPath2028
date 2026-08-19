@@ -41,7 +41,7 @@ button{font-family:var(--font-b);cursor:pointer;border:none;background:none;colo
 .hide{display:none!important}
 
 /* THEME TOGGLE */
-#themeToggle{position:fixed;top:18px;right:18px;z-index:50;width:48px;height:48px;border-radius:50%;
+#themeToggle{position:fixed;bottom:22px;left:22px;z-index:50;width:48px;height:48px;border-radius:50%;
   background:var(--card);border:1px solid var(--card-brd);backdrop-filter:var(--glass);font-size:19px;
   display:flex;align-items:center;justify-content:center;transition:transform .3s,background .3s;box-shadow:var(--shadow)}
 #themeToggle:hover{transform:rotate(25deg) scale(1.08)}
@@ -70,6 +70,16 @@ button{font-family:var(--font-b);cursor:pointer;border:none;background:none;colo
 .exam-card[data-exam="CET"]:hover{box-shadow:0 0 0 1px var(--cet),0 22px 60px rgba(46,213,115,.35);border-color:var(--cet)}
 .exam-card[data-exam="Boards"]:hover{box-shadow:0 0 0 1px var(--board),0 22px 60px rgba(61,123,255,.35);border-color:var(--board)}
 .exam-card[data-exam="JEE"] .ico{color:var(--jee)} .exam-card[data-exam="CET"] .ico{color:var(--cet)} .exam-card[data-exam="Boards"] .ico{color:var(--board)}
+
+/* AUTH */
+#authScreen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px}
+.auth-card{background:var(--card);border:1px solid var(--card-brd);backdrop-filter:var(--glass);border-radius:24px;padding:32px;width:100%;max-width:400px;box-shadow:var(--shadow)}
+.auth-tabs{display:flex;gap:8px;margin-bottom:22px}
+.auth-tabs button{flex:1;padding:10px;border-radius:12px;font-weight:700;background:transparent;color:var(--muted);border:1px solid var(--card-brd)}
+.auth-tabs button.active{background:var(--accent);color:#fff;border-color:transparent}
+.auth-err{color:#ff6b78;font-size:.82rem;margin-top:10px;min-height:18px}
+.user-chip{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:20px;background:var(--card);border:1px solid var(--card-brd);font-size:.82rem;font-weight:600;white-space:nowrap;max-width:190px;overflow:hidden}
+.user-chip span{overflow:hidden;text-overflow:ellipsis}
 
 /* APP SHELL */
 #app{min-height:100vh}
@@ -223,6 +233,21 @@ option{background:var(--bg2);color:var(--txt)}
   </div>
 </div>
 
+<!-- AUTH -->
+<div id="authScreen" class="wrap hide">
+  <img src="icon-192.png" alt="logo" class="landing-logo" onerror="this.style.display='none'" style="width:84px;height:84px" />
+  <h1 class="brand" style="font-size:clamp(2rem,6vw,3.2rem)">⚡ Career Path 2028</h1>
+  <p class="sub" style="margin-bottom:26px">Sign in to sync your progress across all your devices</p>
+  <div class="auth-card">
+    <div class="auth-tabs"><button id="tabLogin" class="active" onclick="switchAuth('login')">Log In</button><button id="tabSignup" onclick="switchAuth('signup')">Sign Up</button></div>
+    <div class="field" id="unameField" style="display:none"><label>Username</label><input id="auName" placeholder="Your name" autocomplete="name"></div>
+    <div class="field"><label>Email</label><input id="auEmail" type="email" placeholder="you@example.com" autocomplete="email"></div>
+    <div class="field"><label>Password</label><input id="auPass" type="password" placeholder="At least 6 characters" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitAuth()"></div>
+    <button class="btn" style="width:100%;justify-content:center" onclick="submitAuth()" id="auBtn"><i class="fa-solid fa-right-to-bracket"></i> Log In</button>
+    <div class="auth-err" id="auErr"></div>
+  </div>
+</div>
+
 <!-- APP -->
 <div id="app" class="wrap hide">
   <div class="topbar">
@@ -233,10 +258,12 @@ option{background:var(--bg2);color:var(--txt)}
       <button data-view="study">Revision & Study</button>
       <button data-view="tests">Tests</button>
       <button data-view="insights">Insights</button>
+      <button data-view="backlog">Backlog</button>
       <button data-view="files">Files</button>
       <button data-view="settings">Settings</button>
     </div>
     <div class="exam-pill" id="examPill">JEE</div>
+    <div class="user-chip hide" id="userChip"><i class="fa-solid fa-user"></i><span id="userName"></span><button onclick="doLogout()" title="Log out" style="color:var(--muted);margin-left:2px"><i class="fa-solid fa-right-from-bracket"></i></button></div>
   </div>
   <div class="container" id="views"></div>
 </div>
@@ -244,6 +271,10 @@ option{background:var(--bg2);color:var(--txt)}
 <!-- MODAL + TOAST -->
 <div class="modal-bg" id="modalBg"><div class="modal" id="modalBox"></div></div>
 <div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 
 <script>
 /* ============ STORAGE ============ */
@@ -276,16 +307,20 @@ function buildSyllabus(){
   return out;
 }
 let state=load();
-function load(){
-  const raw=localStorage.getItem(LS);let s;
-  if(raw){try{s=JSON.parse(raw)}catch(e){}}
-  if(!s)s={exam:'JEE',theme:'dark',settings:{dailyTarget:4,groqKey:''},
-    syllabus:buildSyllabus(),revisions:[],sessions:[],tests:[],files:[],lastProgress:0};
-  if(!s.upcoming)s.upcoming=[];
+function applyDefaults(s){
+  s=s||{};
+  if(!s.exam)s.exam='JEE'; if(!s.theme)s.theme='dark';
+  if(!s.settings)s.settings={dailyTarget:4,groqKey:''};
+  if(!s.syllabus)s.syllabus=buildSyllabus();
+  if(!s.revisions)s.revisions=[]; if(!s.sessions)s.sessions=[]; if(!s.tests)s.tests=[];
+  if(!s.files)s.files=[]; if(!s.upcoming)s.upcoming=[]; if(!s.backlog)s.backlog=[];
+  if(typeof s.lastProgress!=='number')s.lastProgress=0;
   if(!s.examDates)s.examDates={JEE:{date:'2028-01-20',adv:'2028-05-18'},CET:{date:'2028-05-05'},Boards:{date:'2028-02-15'}};
+  if(!s.profile)s.profile={username:''};
   return s;
 }
-function save(){localStorage.setItem(LS,JSON.stringify(state))}
+function load(){let s;const raw=localStorage.getItem(LS);if(raw){try{s=JSON.parse(raw)}catch(e){}}return applyDefaults(s);}
+function save(){localStorage.setItem(LS,JSON.stringify(state));scheduleCloudPush();}
 
 /* ============ SOUND ============ */
 let ac;
@@ -367,8 +402,8 @@ let currentView='dashboard';
 function render(v){currentView=v;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   const el=document.getElementById('views');
-  el.innerHTML=({dashboard:dashboardView,syllabus:syllabusView,study:studyView,tests:testsView,insights:insightsView,files:filesView,settings:settingsView}[v])();
-  ({dashboard:dashInit,syllabus:sylInit,study:studyInit,tests:testsInit,insights:insInit,files:filesInit,settings:setInit}[v])();
+  el.innerHTML=({dashboard:dashboardView,syllabus:syllabusView,study:studyView,tests:testsView,insights:insightsView,backlog:backlogView,files:filesView,settings:settingsView}[v])();
+  ({dashboard:dashInit,syllabus:sylInit,study:studyInit,tests:testsInit,insights:insInit,backlog:backlogInit,files:filesInit,settings:setInit}[v])();
 }
 document.getElementById('nav').addEventListener('click',e=>{const b=e.target.closest('button');if(b){clickSound();render(b.dataset.view);}});
 
@@ -378,7 +413,7 @@ function dashboardView(){
   const d=daysTo(mainDate);const op=overallPct();
   const upc=[...state.upcoming].sort((a,b)=>a.date.localeCompare(b.date));
   const dueCount=state.revisions.filter(r=>r.status==='due'&&r.due<=todayStr()).length;
-  const backlog=state.revisions.filter(r=>r.status==='due'&&r.due<todayStr()).length;
+  const backlog=state.backlog.filter(b=>!b.done).length;
   const chapDone=(()=>{let n=0;for(const s of SUBJECTS)for(const cl of[11,12])for(const ch of state.syllabus[s][cl])if(chapterPct(ch)>=100)n++;return n;})();
   const todayM=studyMin(s=>s.date===todayStr());
   const targetM=(state.settings.dailyTarget||4)*60;const tpct=Math.min(100,todayM/targetM*100);
@@ -400,7 +435,7 @@ function dashboardView(){
   <div class="grid g4" style="margin-bottom:18px">
     ${stat('Today\'s Study',fmtMin(todayM),'fa-clock')}
     ${stat('Due Revisions',dueCount,'fa-rotate')}
-    ${stat('Backlog',backlog,'fa-triangle-exclamation')}
+    <div onclick="render('backlog')" style="cursor:pointer">${stat('Backlog',backlog,'fa-triangle-exclamation')}</div>
     ${stat('Chapters Done',chapDone,'fa-circle-check')}
   </div>
   <div class="grid g2">
@@ -713,6 +748,35 @@ function insightsView(){return `<div class="page-title">Insights</div><div class
     ${SUBJECTS.map(s=>{const p=subjectPct(s);return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:.86rem;margin-bottom:5px"><span>${s}</span><b style="color:${barColor(p)}">${p.toFixed(0)}%</b></div><div class="bar" style="height:11px"><span style="width:${p}%;background:${barColor(p)}"></span></div></div>`;}).join('')}
   </div>`;}
 function insInit(){}
+
+/* ============ BACKLOG ============ */
+function backlogView(){const items=[...state.backlog].sort((a,b)=>(a.done-b.done)||(a.target||'').localeCompare(b.target||''));
+  const pending=state.backlog.filter(b=>!b.done).length,done=state.backlog.filter(b=>b.done).length;
+  return `<div class="page-title">Backlog</div><div class="page-sub">Track pending work you're behind on — create, complete & clear it</div>
+  <div class="grid g2" style="margin-bottom:18px">${stat('Pending',pending,'fa-list-ul')}${stat('Cleared',done,'fa-circle-check')}</div>
+  <div class="card" style="margin-bottom:18px">
+    <div class="label" style="margin-bottom:14px">Add Backlog Item</div>
+    <div class="field"><label>What's pending?</label><input id="blTitle" placeholder="e.g. Complete Thermodynamics DPPs" onkeydown="if(event.key==='Enter')addBacklog()"></div>
+    <div class="row"><div class="field" style="flex:1"><label>Subject (optional)</label><select id="blSub"><option value="">—</option>${SUBJECTS.map(s=>`<option>${s}</option>`).join('')}</select></div>
+    <div class="field" style="flex:1"><label>Target date (optional)</label><input type="date" id="blTarget"></div></div>
+    <button class="btn" onclick="addBacklog()"><i class="fa-solid fa-plus"></i> Add to Backlog</button>
+  </div>
+  <div class="card">
+    <div class="label" style="margin-bottom:14px">Your Backlog</div>
+    ${items.length?items.map(b=>`<div class="li" style="${b.done?'opacity:.55':''}">
+      <button class="btn sm ${b.done?'ghost':'ok'}" onclick="toggleBacklog('${b.id}')" title="${b.done?'Mark pending':'Mark complete'}"><i class="fa-solid ${b.done?'fa-rotate-left':'fa-check'}"></i></button>
+      <div class="grow"><b style="${b.done?'text-decoration:line-through':''}">${b.title}</b><br>
+      <small>${b.subject?b.subject+' • ':''}${b.target?'due '+b.target+(b.target<todayStr()&&!b.done?' ⚠️ overdue':''):'no date'}</small></div>
+      ${b.done?`<span class="tag done">cleared</span>`:''}
+      <button class="btn sm danger" onclick="delBacklog('${b.id}')"><i class="fa-solid fa-trash"></i></button></div>`).join(''):`<p style="color:var(--muted);font-size:.88rem">No backlog — you're all caught up! 🎉</p>`}
+  </div>`;}
+function backlogInit(){}
+function addBacklog(){const t=document.getElementById('blTitle').value.trim();if(!t)return toast('Type what\'s pending');
+  state.backlog.push({id:uid(),title:t,subject:document.getElementById('blSub').value,target:document.getElementById('blTarget').value,done:false,created:todayStr()});
+  save();okSound();render('backlog');toast('📌 Added to backlog');}
+function toggleBacklog(id){const b=state.backlog.find(x=>x.id===id);if(!b)return;b.done=!b.done;save();
+  if(b.done){celebrate('✅ Backlog cleared!');}else beep(400,.1,'sine',.12);render('backlog');}
+function delBacklog(id){state.backlog=state.backlog.filter(b=>b.id!==id);save();beep(300,.1,'sine',.12);render('backlog');toast('🗑️ Removed');}
 function chapModal(s,cl,ci){const ch=state.syllabus[s][cl][ci];
   openModal(`<h3>${ch.name} <span class="x" onclick="closeModal()">×</span></h3>
     <p style="color:var(--muted);font-size:.85rem;margin-bottom:16px">${s} • Class ${cl} • Overall ${chapterPct(ch).toFixed(0)}%</p>
@@ -746,6 +810,11 @@ function settingsView(){return `<div class="page-title">Settings</div><div class
       <div class="field" style="flex:1"><label>Boards date</label><input type="date" id="edBoards" value="${examDate('Boards')}"></div></div>
       <button class="btn" onclick="saveExamDates()"><i class="fa-solid fa-floppy-disk"></i> Save Dates</button>
       <p style="color:var(--muted);font-size:.78rem;margin-top:10px">The Dashboard countdown updates automatically.</p></div>
+    <div class="card"><div class="label" style="margin-bottom:14px"><i class="fa-solid fa-cloud"></i> Cloud Sync (Firebase)</div>
+      <p style="color:var(--muted);font-size:.8rem;margin-bottom:10px">Status: <b style="color:${cloudOn()?'var(--green)':'var(--muted)'}">${cloudOn()?(currentUser?'Signed in as '+((state.profile&&state.profile.username)||currentUser.email):'Configured — sign in to sync'):'Not configured'}</b></p>
+      <div class="field"><label>Paste your Firebase config to enable login &amp; sync</label><textarea id="fbCfg" rows="6" placeholder='apiKey: "AIza...", authDomain: "xxx.firebaseapp.com", projectId: "xxx", storageBucket: "...", messagingSenderId: "...", appId: "..."'>${localStorage.getItem('cp2028_fb')?JSON.stringify(JSON.parse(localStorage.getItem('cp2028_fb')),null,2):''}</textarea></div>
+      <div class="row"><button class="btn" onclick="saveFbConfig()"><i class="fa-solid fa-floppy-disk"></i> Save &amp; Enable</button>${currentUser?`<button class="btn ghost" onclick="doLogout()"><i class="fa-solid fa-right-from-bracket"></i> Log out</button>`:''}</div>
+      <p style="color:var(--muted);font-size:.76rem;margin-top:10px">These keys are safe to store client-side; per-user security is enforced by Firestore rules.</p></div>
     <div class="card"><div class="label" style="margin-bottom:14px"><i class="fa-solid fa-database"></i> Data Backup</div>
       <div class="row"><button class="btn ghost" onclick="exportData()"><i class="fa-solid fa-download"></i> Export JSON</button>
       <button class="btn ghost" onclick="document.getElementById('impFile').click()"><i class="fa-solid fa-upload"></i> Import JSON</button>
@@ -829,7 +898,7 @@ document.getElementById('themeToggle').onclick=()=>{state.theme=state.theme==='d
 function enterApp(exam){state.exam=exam;save();
   document.getElementById('landing').classList.add('hide');document.getElementById('app').classList.remove('hide');
   document.getElementById('examPill').textContent=exam;document.getElementById('examPill').style.color=EXAMS[exam].color;
-  render('dashboard');}
+  showUser();render('dashboard');}
 function goLanding(){document.getElementById('app').classList.add('hide');document.getElementById('landing').classList.remove('hide');}
 document.querySelectorAll('.exam-card').forEach(c=>{c.addEventListener('mouseenter',hoverSound);
   c.addEventListener('click',()=>{clickSound();setTimeout(()=>enterApp(c.dataset.exam),120);});});
@@ -842,8 +911,89 @@ document.getElementById('installBtn').onclick=async()=>{if(!deferredPrompt)retur
 window.addEventListener('appinstalled',()=>{document.getElementById('installBtn').classList.add('hide');toast('✅ Installed! Open it from your home screen.');});
 if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 
+/* ============ AUTH + CLOUD SYNC (Firebase) ============ */
+/* ===== PASTE YOUR FIREBASE CONFIG BELOW (or use Settings → Cloud Sync) ===== */
+const FIREBASE_CONFIG={
+  apiKey:"", authDomain:"", projectId:"", storageBucket:"", messagingSenderId:"", appId:""
+};
+/* ========================================================================== */
+let fbAuth=null,fbDb=null,currentUser=null,cloudTimer=null,authMode='login';
+function fbConfig(){let c={...FIREBASE_CONFIG};try{const o=JSON.parse(localStorage.getItem('cp2028_fb')||'null');if(o&&o.apiKey)c=o;}catch(e){}return c;}
+function cloudOn(){const c=fbConfig();return !!(window.firebase&&c.apiKey&&c.projectId);}
+function initFirebase(){
+  if(!cloudOn())return false;
+  try{if(!firebase.apps.length)firebase.initializeApp(fbConfig());
+    fbAuth=firebase.auth();fbDb=firebase.firestore();
+    fbAuth.onAuthStateChanged(onAuthChanged);return true;
+  }catch(e){console.warn('Firebase init failed',e);return false;}
+}
+function switchAuth(m){authMode=m;
+  document.getElementById('tabLogin').classList.toggle('active',m==='login');
+  document.getElementById('tabSignup').classList.toggle('active',m==='signup');
+  document.getElementById('unameField').style.display=m==='signup'?'block':'none';
+  document.getElementById('auBtn').innerHTML=m==='signup'?'<i class="fa-solid fa-user-plus"></i> Create Account':'<i class="fa-solid fa-right-to-bracket"></i> Log In';
+  document.getElementById('auErr').textContent='';clickSound();}
+async function submitAuth(){
+  const email=document.getElementById('auEmail').value.trim(),pass=document.getElementById('auPass').value,err=document.getElementById('auErr');
+  err.textContent='';if(!email||!pass)return err.textContent='Enter your email and password.';
+  const btn=document.getElementById('auBtn');const old=btn.innerHTML;btn.innerHTML='<i class="fa-solid fa-spinner spin"></i> Please wait...';
+  try{
+    if(authMode==='signup'){
+      const name=document.getElementById('auName').value.trim()||email.split('@')[0];
+      const cred=await fbAuth.createUserWithEmailAndPassword(email,pass);
+      await cred.user.updateProfile({displayName:name});
+      if(!state.profile)state.profile={};state.profile.username=name;localStorage.setItem(LS,JSON.stringify(state));
+    }else{await fbAuth.signInWithEmailAndPassword(email,pass);}
+    okSound();
+  }catch(e){btn.innerHTML=old;err.textContent=authError(e);}
+}
+function authError(e){const m=(e&&e.code)||'';
+  if(m.includes('email-already-in-use'))return 'That email is already registered — try logging in.';
+  if(m.includes('invalid-email'))return 'That email address looks invalid.';
+  if(m.includes('weak-password'))return 'Password should be at least 6 characters.';
+  if(m.includes('wrong-password')||m.includes('invalid-credential'))return 'Wrong email or password.';
+  if(m.includes('user-not-found'))return 'No account with that email — sign up first.';
+  if(m.includes('network'))return 'Network error — check your connection.';
+  if(m.includes('operation-not-allowed'))return 'Enable Email/Password in Firebase console first.';
+  return (e&&e.message)||'Something went wrong.';}
+async function onAuthChanged(user){
+  if(user){currentUser=user;
+    try{const doc=await fbDb.collection('users').doc(user.uid).get();
+      if(doc.exists&&doc.data()&&doc.data().state){state=applyDefaults(doc.data().state);localStorage.setItem(LS,JSON.stringify(state));toast('☁️ Synced from cloud');}
+      else{if(!state.profile)state.profile={};state.profile.username=user.displayName||state.profile.username||'';localStorage.setItem(LS,JSON.stringify(state));await pushCloud();}
+    }catch(e){console.warn('cloud pull failed',e);toast('⚠️ Cloud sync issue — using local data');}
+    applyTheme();showUser();
+    document.getElementById('authScreen').classList.add('hide');
+    document.getElementById('landing').classList.remove('hide');
+  }else{currentUser=null;
+    document.getElementById('app').classList.add('hide');
+    document.getElementById('landing').classList.add('hide');
+    document.getElementById('userChip').classList.add('hide');
+    document.getElementById('authScreen').classList.remove('hide');
+  }
+}
+function showUser(){const c=document.getElementById('userChip');if(!currentUser){c.classList.add('hide');return;}
+  document.getElementById('userName').textContent=(state.profile&&state.profile.username)||currentUser.email;c.classList.remove('hide');}
+async function doLogout(){clickSound();try{await pushCloud();await fbAuth.signOut();}catch(e){}toast('👋 Logged out');}
+function scheduleCloudPush(){if(!currentUser||!fbDb)return;clearTimeout(cloudTimer);cloudTimer=setTimeout(pushCloud,1500);}
+async function pushCloud(){if(!currentUser||!fbDb)return;
+  try{await fbDb.collection('users').doc(currentUser.uid).set({username:(state.profile&&state.profile.username)||'',state:state,updated:Date.now()},{merge:true});}catch(e){console.warn('push failed',e);}}
+function parseFbConfig(txt){txt=(txt||'').trim();
+  try{if(txt.startsWith('{'))return JSON.parse(txt);}catch(e){}
+  const keys=['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'];const o={};
+  keys.forEach(k=>{let m=txt.match(new RegExp(k+'\\s*:\\s*"([^"]+)"'))||txt.match(new RegExp(k+"\\s*:\\s*'([^']+)'"));if(m)o[k]=m[1];});
+  return o;}
+function saveFbConfig(){const o=parseFbConfig(document.getElementById('fbCfg').value);
+  if(!o.apiKey||!o.projectId)return toast('❌ Could not read apiKey/projectId — paste the whole config');
+  localStorage.setItem('cp2028_fb',JSON.stringify(o));okSound();toast('✅ Cloud enabled! Reloading...');setTimeout(()=>location.reload(),900);}
+
 /* ============ INIT ============ */
 applyTheme();
+if(cloudOn()){
+  document.getElementById('landing').classList.add('hide');
+  document.getElementById('authScreen').classList.remove('hide');
+  switchAuth('login');initFirebase();
+}
 </script>
 </body>
 </html>
