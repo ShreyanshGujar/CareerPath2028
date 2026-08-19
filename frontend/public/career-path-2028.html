@@ -218,6 +218,7 @@ option{background:var(--bg2);color:var(--txt)}
       <button data-view="study">Revision & Study</button>
       <button data-view="tests">Tests</button>
       <button data-view="insights">Insights</button>
+      <button data-view="files">Files</button>
       <button data-view="settings">Settings</button>
     </div>
     <div class="exam-pill" id="examPill">JEE</div>
@@ -261,10 +262,13 @@ function buildSyllabus(){
 }
 let state=load();
 function load(){
-  const raw=localStorage.getItem(LS);
-  if(raw){try{return JSON.parse(raw)}catch(e){}}
-  return {exam:'JEE',theme:'dark',settings:{dailyTarget:4,groqKey:''},
+  const raw=localStorage.getItem(LS);let s;
+  if(raw){try{s=JSON.parse(raw)}catch(e){}}
+  if(!s)s={exam:'JEE',theme:'dark',settings:{dailyTarget:4,groqKey:''},
     syllabus:buildSyllabus(),revisions:[],sessions:[],tests:[],files:[],lastProgress:0};
+  if(!s.upcoming)s.upcoming=[];
+  if(!s.examDates)s.examDates={JEE:{date:'2028-01-20',adv:'2028-05-18'},CET:{date:'2028-05-05'},Boards:{date:'2028-02-15'}};
+  return s;
 }
 function save(){localStorage.setItem(LS,JSON.stringify(state))}
 
@@ -279,6 +283,10 @@ function beep(freq=520,dur=.12,type='sine',vol=.15){
 }
 const clickSound=()=>beep(640,.1,'triangle',.18);
 const tickSound=()=>beep(880,.06,'square',.12);
+const hoverSound=()=>beep(430,.05,'sine',.07);
+const okSound=()=>beep(760,.12,'sine',.16);
+function fanfare(){[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>beep(f,.2,'triangle',.2),i*110));}
+function celebrate(msg){confetti();fanfare();if(msg)toast(msg);}
 
 /* ============ PARTICLES ============ */
 (function(){
@@ -331,40 +339,44 @@ function daysTo(d){return Math.max(0,Math.ceil((new Date(d)-new Date())/864e5));
 function weakChapters(){const arr=[];for(const s of SUBJECTS)for(const cl of[11,12])for(const ch of state.syllabus[s][cl]){const p=chapterPct(ch);if(p<50)arr.push({subject:s,cl,name:ch.name,pct:p});}return arr.sort((a,b)=>a.pct-b.pct);}
 function studyMin(filter){return state.sessions.filter(filter).reduce((a,s)=>a+s.minutes,0);}
 function fmtMin(m){const h=Math.floor(m/60);return h?h+'h '+(m%60)+'m':m+'m';}
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function examDate(ex){return (state.examDates[ex]||{}).date||EXAMS[ex].date;}
+function examAdv(ex){return (state.examDates[ex]||{}).adv||EXAMS[ex].adv||'';}
+function tentFrom(dateStr,suffix){if(!dateStr)return '';const d=new Date(dateStr);return 'Tentative '+MONTHS[d.getMonth()]+' '+d.getFullYear()+(suffix||'');}
 
 /* ============ ROUTER ============ */
 let currentView='dashboard';
 function render(v){currentView=v;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   const el=document.getElementById('views');
-  el.innerHTML=({dashboard:dashboardView,syllabus:syllabusView,study:studyView,tests:testsView,insights:insightsView,settings:settingsView}[v])();
-  ({dashboard:dashInit,syllabus:sylInit,study:studyInit,tests:testsInit,insights:insInit,settings:setInit}[v])();
+  el.innerHTML=({dashboard:dashboardView,syllabus:syllabusView,study:studyView,tests:testsView,insights:insightsView,files:filesView,settings:settingsView}[v])();
+  ({dashboard:dashInit,syllabus:sylInit,study:studyInit,tests:testsInit,insights:insInit,files:filesInit,settings:setInit}[v])();
 }
 document.getElementById('nav').addEventListener('click',e=>{const b=e.target.closest('button');if(b){clickSound();render(b.dataset.view);}});
 
 /* ============ DASHBOARD ============ */
 function dashboardView(){
-  const ex=EXAMS[state.exam];const d=daysTo(ex.date);const op=overallPct();
+  const ex=EXAMS[state.exam];const mainDate=examDate(state.exam);const advDate=examAdv(state.exam);
+  const d=daysTo(mainDate);const op=overallPct();
+  const upc=[...state.upcoming].sort((a,b)=>a.date.localeCompare(b.date));
   const dueCount=state.revisions.filter(r=>r.status==='due'&&r.due<=todayStr()).length;
   const backlog=state.revisions.filter(r=>r.status==='due'&&r.due<todayStr()).length;
   const chapDone=(()=>{let n=0;for(const s of SUBJECTS)for(const cl of[11,12])for(const ch of state.syllabus[s][cl])if(chapterPct(ch)>=100)n++;return n;})();
   const todayM=studyMin(s=>s.date===todayStr());
   const targetM=(state.settings.dailyTarget||4)*60;const tpct=Math.min(100,todayM/targetM*100);
-  const tests=[...state.tests].sort((a,b)=>a.date.localeCompare(b.date));
   return `
   <div class="page-title">Dashboard</div><div class="page-sub">Your ${state.exam} mission control • ${todayStr()}</div>
   <div class="grid g2" style="margin-bottom:18px">
     <div class="card countdown">
       <div class="label">${state.exam} Countdown</div>
       <div class="cd-days">${d}</div><div class="cd-sub">days remaining</div>
-      <div class="cd-tent" style="color:${ex.color}">${ex.tent}</div>
-      ${ex.adv?`<div class="cd-sub" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--card-brd)"><b style="color:var(--txt)">${daysTo(ex.adv)}</b> days • ${ex.advTent}</div>`:''}
+      <div class="cd-tent" style="color:${ex.color}">${state.exam==='JEE'?tentFrom(mainDate,' (Main)'):tentFrom(mainDate)}</div>
+      ${state.exam==='JEE'&&advDate?`<div class="cd-sub" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--card-brd)"><b style="color:var(--txt)">${daysTo(advDate)}</b> days • ${tentFrom(advDate,' (Advanced)')}</div>`:''}
     </div>
     <div class="card progwrap" onmousedown="beep(300,.1,'sine',.1)">
       <div class="label">Overall Progress</div>
       <div style="display:flex;align-items:baseline;gap:10px;margin:10px 0 16px"><span class="pct" style="font-size:2.4rem;color:${barColor(op)}">${op.toFixed(0)}%</span><span style="color:var(--muted)">syllabus complete</span></div>
       <div class="bar"><span style="width:${op}%;background:${barColor(op)}"></span></div>
-      <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:.78rem;color:var(--muted)"><span>🔴 &lt;40%</span><span>🟡 40-69%</span><span>🟢 ≥70%</span></div>
     </div>
   </div>
   <div class="grid g4" style="margin-bottom:18px">
@@ -377,10 +389,11 @@ function dashboardView(){
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <div class="label" style="margin:0">Upcoming Tests</div>
-        <button class="btn sm" onclick="render('tests')"><i class="fa-solid fa-plus"></i> Add</button></div>
-      ${tests.filter(t=>t.date>=todayStr()).length?tests.filter(t=>t.date>=todayStr()).map(t=>`
-        <div class="li"><i class="fa-solid fa-calendar-day" style="color:var(--accent)"></i>
-        <div class="grow"><b>${t.name}</b><br><small>${t.date} • in ${daysTo(t.date)} days</small></div></div>`).join(''):`<p style="color:var(--muted);font-size:.88rem">No upcoming tests. Add one from the Tests tab.</p>`}
+        <button class="btn sm" onclick="addUpcomingModal()"><i class="fa-solid fa-plus"></i> Add</button></div>
+      ${upc.length?upc.map(t=>{const due=t.date<=todayStr();return `
+        <div class="li"><i class="fa-solid fa-calendar-day" style="color:${due?'var(--yellow)':'var(--accent)'}"></i>
+        <div class="grow"><b>${t.name}</b><br><small>${t.date} • ${due?'result awaited':'in '+daysTo(t.date)+' days'} • ${t.marks} marks</small></div>
+        ${due?`<button class="btn sm ok" onclick="enterResultModal('${t.id}')">Enter Result</button>`:''}</div>`;}).join(''):`<p style="color:var(--muted);font-size:.88rem">No upcoming tests. Click "Add" to schedule one.</p>`}
     </div>
     <div class="card">
       <div class="label" style="margin-bottom:14px">Today's Target</div>
@@ -391,7 +404,30 @@ function dashboardView(){
   </div>`;
 }
 function stat(l,v,ic){return `<div class="card"><div style="display:flex;justify-content:space-between"><span class="label">${l}</span><i class="fa-solid ${ic}" style="color:var(--accent);opacity:.7"></i></div><div class="stat-num">${v}</div></div>`;}
-function dashInit(){const op=overallPct();if(op>=100&&state.lastProgress<100){confetti();toast('🎉 100% syllabus complete!');}state.lastProgress=op;save();}
+function dashInit(){const op=overallPct();if(op>=100&&state.lastProgress<100){celebrate('🎉 100% syllabus complete! You did it! 🏆');}state.lastProgress=op;save();
+  const due=state.upcoming.find(t=>t.date<=todayStr());if(due)setTimeout(()=>enterResultModal(due.id),400);}
+function addUpcomingModal(){clickSound();openModal(`<h3>Add Upcoming Test <span class="x" onclick="closeModal()">×</span></h3>
+  <div class="field"><label>Test name</label><input id="ucName" placeholder="e.g. Allen Major Test 4"></div>
+  <div class="field"><label>Date</label><input type="date" id="ucDate" value="${todayStr()}"></div>
+  <div class="field"><label>Total marks</label><input type="number" id="ucMarks" value="300"></div>
+  <button class="btn" onclick="saveUpcoming()"><i class="fa-solid fa-calendar-plus"></i> Add Test</button>`);
+  setTimeout(()=>document.getElementById('ucName').focus(),100);}
+function saveUpcoming(){const n=document.getElementById('ucName').value.trim();if(!n)return toast('Enter test name');
+  state.upcoming.push({id:uid(),name:n,date:document.getElementById('ucDate').value,marks:+document.getElementById('ucMarks').value||300});
+  save();closeModal();okSound();toast('🗓️ Test scheduled');render('dashboard');}
+function enterResultModal(id){const t=state.upcoming.find(x=>x.id===id);if(!t)return;beep(560,.12);
+  openModal(`<h3>Enter Result — ${t.name} <span class="x" onclick="closeModal()">×</span></h3>
+  <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">Your test on ${t.date} is here! Enter your marks (total ${t.marks}).</p>
+  <div class="row"><div class="field" style="flex:1"><label>Physics</label><input type="number" id="rPhy" placeholder="0"></div>
+  <div class="field" style="flex:1"><label>Chemistry</label><input type="number" id="rChem" placeholder="0"></div>
+  <div class="field" style="flex:1"><label>Maths</label><input type="number" id="rMath" placeholder="0"></div></div>
+  <div class="field"><label>Portion covered</label><input id="rPort" placeholder="e.g. Mechanics, Organic"></div>
+  <button class="btn ok" onclick="saveResult('${t.id}')"><i class="fa-solid fa-check"></i> Save Result</button>`);}
+function saveResult(id){const t=state.upcoming.find(x=>x.id===id);if(!t)return;
+  state.tests.push({id:uid(),name:t.name,date:t.date,total:t.marks,
+    phy:+document.getElementById('rPhy').value||0,chem:+document.getElementById('rChem').value||0,math:+document.getElementById('rMath').value||0,
+    port:document.getElementById('rPort').value,prep:0});
+  state.upcoming=state.upcoming.filter(x=>x.id!==id);save();closeModal();celebrate('✅ Result saved to Tests!');render('tests');}
 
 /* ============ SYLLABUS ============ */
 let curSub='Physics',curCl=11;
@@ -426,7 +462,7 @@ function toggleChk(ci,ti,k){const ch=state.syllabus[curSub][curCl][ci];const t=c
   t.checks[k]=!t.checks[k];tickSound();
   const nowDone=chapterPct(ch)>=100;save();renderChapters();
   openCis.forEach(i=>{const el=document.querySelector('.chap[data-ci="'+i+'"]');if(el)el.classList.add('open');});
-  if(nowDone){confetti();toast('🎉 '+ch.name+' complete!');}
+  if(nowDone){celebrate('🎉 '+ch.name+' complete!');}
 }
 function addTopic(ci){openModal(`<h3>Add Topic <span class="x" onclick="closeModal()">×</span></h3>
   <div class="field"><label>Topic name</label><input id="tName" placeholder="e.g. Projectile Motion"></div>
@@ -549,7 +585,7 @@ function buildContext(){
   const weak=weakChapters().slice(0,8).map(w=>`${w.name} (${w.pct.toFixed(0)}%)`).join(', ');
   const due=state.revisions.filter(r=>r.status==='due'&&r.due<=todayStr()).map(r=>r.topic).slice(0,8).join(', ');
   const recent=[...state.tests].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,3).map(t=>`${t.name}: ${(+t.phy||0)+(+t.chem||0)+(+t.math||0)}/${t.total}`).join('; ');
-  return `Student exam target: ${state.exam}. Exam date approx ${EXAMS[state.exam].date} (${daysTo(EXAMS[state.exam].date)} days left).
+  return `Student exam target: ${state.exam}. Exam date approx ${examDate(state.exam)} (${daysTo(examDate(state.exam))} days left).
 Overall syllabus progress: ${overallPct().toFixed(0)}%. Subject-wise: ${SUBJECTS.map(s=>s+' '+subjectPct(s).toFixed(0)+'%').join(', ')}.
 Weak chapters: ${weak||'none'}. Revisions due today: ${due||'none'}. Recent tests: ${recent||'none'}.
 Study time today: ${fmtMin(studyMin(s=>s.date===todayStr()))}, this week: ${fmtMin(studyMin(s=>inWeek(s.date)))}.`;
@@ -560,7 +596,7 @@ function ruleFallback(q){
   if(q.includes('today')||q.includes('study'))return "Suggested plan for today:\n\n"+(weak.length?weak.slice(0,3).map((w,i)=>`${i+1}. ${w.name} — do Theory + DPP`).join('\n'):"Revise strong chapters and attempt PYQs.")+"\n\nDon't forget your due revisions!";
   if(q.includes('revision')||q.includes('due')){const d=state.revisions.filter(r=>r.status==='due'&&r.due<=todayStr());return d.length?"Due revisions:\n"+d.map(r=>'• '+r.topic).join('\n'):"No revisions due today ✅";}
   if(q.includes('progress'))return `Overall progress: ${overallPct().toFixed(0)}%\n`+SUBJECTS.map(s=>`• ${s}: ${subjectPct(s).toFixed(0)}%`).join('\n');
-  return `I'm running in offline mode (no Groq key). I can still help!\nTry asking about your "weak topics", "what to study today", "due revisions" or "progress".\n\n📌 ${daysTo(EXAMS[state.exam].date)} days to your ${state.exam} exam — keep pushing!`;
+  return `I'm running in offline mode (no Groq key). I can still help!\nTry asking about your "weak topics", "what to study today", "due revisions" or "progress".\n\n📌 ${daysTo(examDate(state.exam))} days to your ${state.exam} exam — keep pushing!`;
 }
 async function sendChat(){
   const inp=document.getElementById('chatInp');const q=inp.value.trim();if(!q)return;inp.value='';
@@ -571,7 +607,7 @@ async function sendChat(){
     try{
       const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',
         headers:{'Content-Type':'application/json','Authorization':'Bearer '+state.settings.groqKey},
-        body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[
+        body:JSON.stringify({model:'openai/gpt-oss-120b',messages:[
           {role:'system',content:'You are a friendly, motivating study coach for an Indian 11th-grade student preparing for competitive exams. Be concise, practical and encouraging. Use the student data below to personalize advice.\n\n'+buildContext()},
           ...chatHist.slice(-6)]})});
       if(!res.ok)throw new Error(res.status);
@@ -612,7 +648,7 @@ function addTest(){const n=document.getElementById('tsName').value.trim();if(!n)
   state.tests.push({id:uid(),name:n,date:document.getElementById('tsDate').value,total:+document.getElementById('tsTotal').value||300,
     phy:+document.getElementById('tsPhy').value||0,chem:+document.getElementById('tsChem').value||0,math:+document.getElementById('tsMath').value||0,
     port:document.getElementById('tsPort').value,prep:+document.getElementById('tsPrep').value||0});
-  save();confetti();toast('Test saved!');render('tests');}
+  save();celebrate('🎉 Test saved!');render('tests');}
 function delTest(id){state.tests=state.tests.filter(t=>t.id!==id);save();render('tests');toast('Deleted');}
 function renderAnalytics(){
   const ts=[...state.tests].sort((a,b)=>a.date.localeCompare(b.date));
@@ -641,7 +677,7 @@ function renderAnalytics(){
 /* ============ INSIGHTS ============ */
 function insightsView(){return `<div class="page-title">Insights</div><div class="page-sub">Spot your weak spots & personal analytics</div>
   <div class="card" style="margin-bottom:18px"><div class="label" style="margin-bottom:6px">Weakness Heatmap</div>
-  <p style="color:var(--muted);font-size:.82rem;margin-bottom:14px">Click any chapter for a topic breakdown • 🟢≥70% 🟡40-69% 🔴&lt;40%</p>
+  <p style="color:var(--muted);font-size:.82rem;margin-bottom:14px">Click any chapter for a topic breakdown</p>
   ${SUBJECTS.map(s=>`<div style="margin-bottom:18px"><div style="font-weight:700;margin-bottom:8px">${s}</div>
     <div class="heat">${[11,12].flatMap(cl=>state.syllabus[s][cl].map((ch,ci)=>{const p=chapterPct(ch);
       return `<div class="cell" style="background:${barColor(p)}" onclick="chapModal('${s}',${cl},${ci})"><span>${ch.name}</span><small>C${cl} • ${p.toFixed(0)}%</small></div>`;})).join('')}</div></div>`).join('')}
@@ -680,28 +716,30 @@ function settingsView(){return `<div class="page-title">Settings</div><div class
       <div class="row"><div class="field" style="flex:1"><label>Class</label><select id="msCl"><option>11</option><option>12</option></select></div>
       <div class="field" style="flex:2"><label>New chapter name</label><input id="msChap" placeholder="e.g. Rotational Dynamics"></div></div>
       <button class="btn" onclick="addChapter()"><i class="fa-solid fa-plus"></i> Add Chapter</button></div>
+    <div class="card"><div class="label" style="margin-bottom:14px"><i class="fa-solid fa-calendar-days"></i> Exam Dates</div>
+      <div class="field"><label>JEE Main / primary exam date</label><input type="date" id="edJEE" value="${examDate('JEE')}"></div>
+      <div class="field"><label>JEE Advanced date</label><input type="date" id="edJEEadv" value="${examAdv('JEE')}"></div>
+      <div class="row"><div class="field" style="flex:1"><label>CET date</label><input type="date" id="edCET" value="${examDate('CET')}"></div>
+      <div class="field" style="flex:1"><label>Boards date</label><input type="date" id="edBoards" value="${examDate('Boards')}"></div></div>
+      <button class="btn" onclick="saveExamDates()"><i class="fa-solid fa-floppy-disk"></i> Save Dates</button>
+      <p style="color:var(--muted);font-size:.78rem;margin-top:10px">The Dashboard countdown updates automatically.</p></div>
     <div class="card"><div class="label" style="margin-bottom:14px"><i class="fa-solid fa-database"></i> Data Backup</div>
       <div class="row"><button class="btn ghost" onclick="exportData()"><i class="fa-solid fa-download"></i> Export JSON</button>
       <button class="btn ghost" onclick="document.getElementById('impFile').click()"><i class="fa-solid fa-upload"></i> Import JSON</button>
       <button class="btn danger" onclick="clearData()"><i class="fa-solid fa-trash"></i> Clear All</button></div>
       <input type="file" id="impFile" accept=".json" class="hide" onchange="importData(event)"></div>
-  </div>
-  <div class="card" style="margin-top:18px"><div class="label" style="margin-bottom:14px"><i class="fa-solid fa-folder-open"></i> File Manager</div>
-    <div class="row" style="margin-bottom:14px;align-items:flex-end">
-      <div class="field" style="flex:1;margin:0"><label>Subject</label><input id="fSub" placeholder="Physics"></div>
-      <div class="field" style="flex:1;margin:0"><label>Chapter</label><input id="fChap" placeholder="Kinematics"></div>
-      <div class="field" style="flex:1;margin:0"><label>Topic</label><input id="fTopic" placeholder="Projectile"></div>
-      <button class="btn" onclick="document.getElementById('upFile').click()"><i class="fa-solid fa-upload"></i> Upload</button>
-      <input type="file" id="upFile" class="hide" onchange="uploadFile(event)"></div>
-    <div id="fileTree"></div>
   </div>`;}
-function setInit(){renderFiles();}
+function setInit(){}
+function saveExamDates(){state.examDates={JEE:{date:document.getElementById('edJEE').value,adv:document.getElementById('edJEEadv').value},
+  CET:{date:document.getElementById('edCET').value},Boards:{date:document.getElementById('edBoards').value}};
+  save();okSound();toast('📅 Exam dates updated');}
 function saveTarget(){state.settings.dailyTarget=+document.getElementById('setTarget').value||4;save();toast('🎯 Target saved');}
 function saveGroq(){state.settings.groqKey=document.getElementById('setGroq').value.trim();save();toast('🔑 Groq key saved');}
 async function testGroq(){const k=document.getElementById('setGroq').value.trim();if(!k)return toast('❌ Enter a key first');toast('<i class="fa-solid fa-spinner spin"></i> Testing...');
   try{const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+k},
-    body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'user',content:'hi'}],max_tokens:5})});
-    if(r.ok){state.settings.groqKey=k;save();toast('✅ Groq API activated!');}else toast('❌ Failed — invalid key ('+r.status+')');
+    body:JSON.stringify({model:'openai/gpt-oss-120b',messages:[{role:'user',content:'hi'}],max_tokens:5})});
+    if(r.ok){state.settings.groqKey=k;save();okSound();toast('✅ Groq API activated!');}
+    else{const j=await r.json().catch(()=>({}));toast('❌ Failed — '+((j.error&&j.error.message)||('HTTP '+r.status)));}
   }catch(e){toast('❌ Failed — network/CORS error');}}
 function addChapter(){const s=document.getElementById('msSub').value,cl=+document.getElementById('msCl').value,nm=document.getElementById('msChap').value.trim();
   if(!nm)return toast('Enter chapter name');state.syllabus[s][cl].push({id:uid(),name:nm,topics:[{id:uid(),name:nm,checks:{}}]});save();toast('Chapter added to '+s);document.getElementById('msChap').value='';}
@@ -715,6 +753,15 @@ function clearData(){openModal(`<h3>Clear all data? <span class="x" onclick="clo
 function doClear(){localStorage.removeItem(LS);idbClear();state=load();closeModal();toast('🗑️ All data cleared');goLanding();}
 
 /* ============ FILE MANAGER (IndexedDB) ============ */
+function filesView(){return `<div class="page-title">File Manager</div><div class="page-sub">Upload notes, PDFs & images — organized by Subject → Chapter → Topic</div>
+  <div class="card"><div class="row" style="margin-bottom:14px;align-items:flex-end">
+    <div class="field" style="flex:1;margin:0"><label>Subject</label><input id="fSub" placeholder="Physics"></div>
+    <div class="field" style="flex:1;margin:0"><label>Chapter</label><input id="fChap" placeholder="Kinematics"></div>
+    <div class="field" style="flex:1;margin:0"><label>Topic</label><input id="fTopic" placeholder="Projectile"></div>
+    <button class="btn" onclick="document.getElementById('upFile').click()"><i class="fa-solid fa-upload"></i> Upload</button>
+    <input type="file" id="upFile" class="hide" onchange="uploadFile(event)"></div>
+    <div id="fileTree"></div></div>`;}
+function filesInit(){renderFiles();}
 let db;
 function idbOpen(){return new Promise(res=>{const r=indexedDB.open('cp2028files',1);
   r.onupgradeneeded=e=>{e.target.result.createObjectStore('files',{keyPath:'id'});};
@@ -726,10 +773,13 @@ async function idbClear(){await idbOpen();return new Promise(res=>{const t=db.tr
 function uploadFile(e){const f=e.target.files[0];if(!f)return;
   const sub=document.getElementById('fSub').value.trim()||'General',ch=document.getElementById('fChap').value.trim()||'Misc',tp=document.getElementById('fTopic').value.trim()||'—';
   const r=new FileReader();r.onload=async()=>{const id=uid();await idbPut({id,data:r.result,type:f.type,name:f.name});
-    state.files.push({id,name:f.name,sub,ch,tp,type:f.type});save();renderFiles();toast('📎 '+f.name+' uploaded');};r.readAsDataURL(f);}
-async function openFile(id){const rec=await idbGet(id);if(!rec)return toast('File missing');
-  const w=window.open();if(rec.type.startsWith('image/'))w.document.write('<img src="'+rec.data+'" style="max-width:100%">');
-  else w.location=rec.data;}
+    state.files.push({id,name:f.name,sub,ch,tp,type:f.type});save();okSound();renderFiles();toast('📎 '+f.name+' uploaded');};r.readAsDataURL(f);}
+async function openFile(id){const rec=await idbGet(id);if(!rec)return toast('File missing');clickSound();
+  try{const arr=rec.data.split(',');const mime=(arr[0].match(/:(.*?);/)||[])[1]||rec.type||'application/octet-stream';
+    const bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);while(n--)u8[n]=bstr.charCodeAt(n);
+    const url=URL.createObjectURL(new Blob([u8],{type:mime}));window.open(url,'_blank');
+    setTimeout(()=>URL.revokeObjectURL(url),120000);
+  }catch(err){const w=window.open();if(w)w.location=rec.data;else toast('Allow pop-ups to open files');}}
 function delFile(id){idbDel(id);state.files=state.files.filter(f=>f.id!==id);save();renderFiles();toast('Deleted');}
 function renderFiles(){const el=document.getElementById('fileTree');if(!el)return;
   if(!state.files.length){el.innerHTML=`<p style="color:var(--muted);font-size:.88rem">No files yet. Upload PDFs or images with subject/chapter/topic tags — they're organized into folders below.</p>`;return;}
@@ -751,7 +801,8 @@ function enterApp(exam){state.exam=exam;save();
   document.getElementById('examPill').textContent=exam;document.getElementById('examPill').style.color=EXAMS[exam].color;
   render('dashboard');}
 function goLanding(){document.getElementById('app').classList.add('hide');document.getElementById('landing').classList.remove('hide');}
-document.querySelectorAll('.exam-card').forEach(c=>c.addEventListener('click',()=>{clickSound();setTimeout(()=>enterApp(c.dataset.exam),120);}));
+document.querySelectorAll('.exam-card').forEach(c=>{c.addEventListener('mouseenter',hoverSound);
+  c.addEventListener('click',()=>{clickSound();setTimeout(()=>enterApp(c.dataset.exam),120);});});
 
 /* ============ INIT ============ */
 applyTheme();
