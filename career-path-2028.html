@@ -872,21 +872,7 @@ function settingsView(){return `<div class="page-title">Settings</div><div class
     <div class="card"><div class="label" style="margin-bottom:14px"><i class="fa-solid fa-cloud"></i> Account &amp; Cloud Sync</div>
       <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">${currentUser?'Signed in as <b style="color:var(--txt)">'+((state.profile&&state.profile.username)||currentUser.email)+'</b>. Your progress syncs automatically across all your devices. ☁️':'Not signed in.'}</p>
       ${currentUser?`<button class="btn danger" onclick="doLogout()"><i class="fa-solid fa-right-from-bracket"></i> Log out</button>`:''}
-      <details style="margin-top:14px"><summary style="cursor:pointer;font-size:.78rem;color:var(--accent);font-weight:600">Firestore security rules (paste in Firebase → Firestore → Rules)</summary>
-      <pre style="white-space:pre-wrap;font-size:.72rem;background:rgba(0,0,0,.25);border:1px solid var(--card-brd);border-radius:10px;padding:12px;margin-top:8px;color:var(--txt)">rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{userId} {
-      allow read, write: if request.auth != null
-        && request.auth.uid == userId;
-    }
-    match /leaderboard/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.auth.uid == userId;
-    }
-  }
-}</pre></details></div>
+    </div>
     <div class="card"><div class="label" style="margin-bottom:14px"><i class="fa-solid fa-database"></i> Data Backup</div>
       <div class="row"><button class="btn ghost" onclick="exportData()"><i class="fa-solid fa-download"></i> Export JSON</button>
       <button class="btn ghost" onclick="document.getElementById('impFile').click()"><i class="fa-solid fa-upload"></i> Import JSON</button>
